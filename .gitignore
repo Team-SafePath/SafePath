@@ -205,3 +205,20 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Project specific ignores
+# Datasets
+# Ignore datasets
+data/raw/*
+data/interim/*
+data/processed/*
+data/.DS_Store
+
+# Keep folder structure
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+.DS_Store
+cache/
