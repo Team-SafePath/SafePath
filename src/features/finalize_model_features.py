@@ -31,11 +31,9 @@ def finalize_model_features():
 
     print("Dropping non-model columns...")
 
-    df = df.drop(columns=[
-        "date",
-        "road_type",
-        "segment_id"
-    ])
+    drop_cols = ["date", "road_type", "segment_id", "crash_count"]
+    existing_drop_cols = [col for col in drop_cols if col in df.columns]
+    df = df.drop(columns=existing_drop_cols)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(OUTPUT_PATH, index=False)

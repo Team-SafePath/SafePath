@@ -1,0 +1,114 @@
+{
+  "model": "GaussianHMM",
+  "n_states": 3,
+  "n_days": 2557,
+  "date_min": "2018-01-01",
+  "date_max": "2024-12-31",
+  "feature_columns": [
+    "total_crashes",
+    "crash_rate",
+    "avg_crashes_last_7_days",
+    "avg_crashes_last_30_days",
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "windspeed_10m_max",
+    "rain_indicator"
+  ],
+  "state_counts": {
+    "High Risk Regime": 828,
+    "Low Risk Regime": 888,
+    "Moderate Risk Regime": 841
+  },
+  "start_probabilities": [
+    0.0,
+    0.0,
+    1.0
+  ],
+  "transition_matrix": [
+    [
+      0.5921521996620209,
+      0.40784780033797896,
+      7.745343159470198e-38
+    ],
+    [
+      0.3871262187016092,
+      0.6128737812983909,
+      2.4207342979749904e-53
+    ],
+    [
+      5.532310658678752e-05,
+      0.0011508003149083362,
+      0.9987938765785049
+    ]
+  ],
+  "state_means": [
+    {
+      "state_label": "High Risk Regime",
+      "total_crashes": 350.71135265700485,
+      "crash_rate": 0.028836732737488314,
+      "avg_crashes_last_7_days": 0.21067756932746867,
+      "avg_crashes_last_30_days": 0.8985319462652204,
+      "temperature_2m_mean": 11.250120772946861,
+      "precipitation_sum": 4.065338164251208,
+      "windspeed_10m_max": 21.89275362318841,
+      "rain_indicator": 0.5869565217391305
+    },
+    {
+      "state_label": "Low Risk Regime",
+      "total_crashes": 149.2240990990991,
+      "crash_rate": 0.012568770987291734,
+      "avg_crashes_last_7_days": 0.09044811713182128,
+      "avg_crashes_last_30_days": 0.3887513920586681,
+      "temperature_2m_mean": 14.514527027027027,
+      "precipitation_sum": 7.410472972972973,
+      "windspeed_10m_max": 22.571283783783784,
+      "rain_indicator": 1.0
+    },
+    {
+      "state_label": "Moderate Risk Regime",
+      "total_crashes": 150.10582639714625,
+      "crash_rate": 0.012651172140455223,
+      "avg_crashes_last_7_days": 0.08945084315441312,
+      "avg_crashes_last_30_days": 0.3829420818888015,
+      "temperature_2m_mean": 12.016052318668253,
+      "precipitation_sum": 0.0,
+      "windspeed_10m_max": 20.26266349583829,
+      "rain_indicator": 0.0
+    }
+  ],
+  "state_label_info": {
+    "state_order_by_risk": [
+      1,
+      0,
+      2
+    ],
+    "state_label_map": {
+      "1": "Low Risk Regime",
+      "0": "Moderate Risk Regime",
+      "2": "High Risk Regime"
+    },
+    "state_risk_summary": [
+      {
+        "hidden_state": 1,
+        "mean_total_crashes": 149.2240990990991,
+        "mean_crash_rate": 0.012568770987291734,
+        "mean_lag_30": 0.3887513920586681,
+        "state_label": "Low Risk Regime"
+      },
+      {
+        "hidden_state": 0,
+        "mean_total_crashes": 150.10582639714625,
+        "mean_crash_rate": 0.012651172140455223,
+        "mean_lag_30": 0.3829420818888015,
+        "state_label": "Moderate Risk Regime"
+      },
+      {
+        "hidden_state": 2,
+        "mean_total_crashes": 350.71135265700485,
+        "mean_crash_rate": 0.028836732737488314,
+        "mean_lag_30": 0.8985319462652204,
+        "state_label": "High Risk Regime"
+      }
+    ]
+  }
+}
