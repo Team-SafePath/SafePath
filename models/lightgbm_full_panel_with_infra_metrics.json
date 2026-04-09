@@ -1,0 +1,179 @@
+{
+  "model": "LightGBM Full Panel With Infrastructure",
+  "input_path": "data/processed/full_panel_features_with_infra.csv",
+  "train_end_date": "2022-12-31",
+  "valid_end_date": "2023-12-31",
+  "train_rows": 21256466,
+  "valid_rows": 4248965,
+  "test_rows": 4260606,
+  "n_features": 45,
+  "feature_columns": [
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "windspeed_10m_max",
+    "rain_indicator",
+    "segment_length",
+    "road_busway",
+    "road_living_street",
+    "road_motorway",
+    "road_motorway_link",
+    "road_primary",
+    "road_primary_link",
+    "road_residential",
+    "road_secondary",
+    "road_secondary_link",
+    "road_tertiary",
+    "road_tertiary_link",
+    "road_trunk",
+    "road_trunk_link",
+    "road_unclassified",
+    "day_of_week",
+    "month",
+    "sin_month",
+    "cos_month",
+    "sin_day_of_week",
+    "cos_day_of_week",
+    "crashes_last_7_days",
+    "crashes_last_30_days",
+    "lanes",
+    "maxspeed",
+    "oneway",
+    "is_bridge",
+    "is_tunnel",
+    "is_junction",
+    "segment_curvature",
+    "bearing_change_max",
+    "u_degree",
+    "v_degree",
+    "intersection_degree_max",
+    "near_intersection",
+    "near_traffic_signal",
+    "near_crossing",
+    "curvature_norm",
+    "bearing_norm",
+    "intersection_norm",
+    "visibility_risk_score"
+  ],
+  "scale_pos_weight": 48.087404424143195,
+  "threshold": 0.5,
+  "validation_metrics": {
+    "threshold": 0.5,
+    "roc_auc": 0.6216190811630056,
+    "average_precision": 0.026220435104201453,
+    "balanced_accuracy": 0.5902805536616043,
+    "f1": 0.045741372579590545,
+    "confusion_matrix": [
+      [
+        3440497,
+        756008
+      ],
+      [
+        33537,
+        18923
+      ]
+    ],
+    "classification_report": {
+      "0": {
+        "precision": 0.9903463811810708,
+        "recall": 0.819848183190536,
+        "f1-score": 0.8970678592469187,
+        "support": 4196505.0
+      },
+      "1": {
+        "precision": 0.024418948267652216,
+        "recall": 0.36071292413267253,
+        "f1-score": 0.045741372579590545,
+        "support": 52460.0
+      },
+      "accuracy": 0.814179453113876,
+      "macro avg": {
+        "precision": 0.5073826647243614,
+        "recall": 0.5902805536616043,
+        "f1-score": 0.4714046159132546,
+        "support": 4248965.0
+      },
+      "weighted avg": {
+        "precision": 0.9784205232060962,
+        "recall": 0.814179453113876,
+        "f1-score": 0.8865569259983351,
+        "support": 4248965.0
+      }
+    }
+  },
+  "test_metrics": {
+    "threshold": 0.5,
+    "roc_auc": 0.6298162390929939,
+    "average_precision": 0.025164728533930897,
+    "balanced_accuracy": 0.5948363385225012,
+    "f1": 0.043214806880788874,
+    "confusion_matrix": [
+      [
+        3517056,
+        697311
+      ],
+      [
+        29818,
+        16421
+      ]
+    ],
+    "classification_report": {
+      "0": {
+        "precision": 0.9915931606253845,
+        "recall": 0.8345395643046749,
+        "f1-score": 0.9063127919877761,
+        "support": 4214367.0
+      },
+      "1": {
+        "precision": 0.02300723520873381,
+        "recall": 0.35513311274032744,
+        "f1-score": 0.043214806880788874,
+        "support": 46239.0
+      },
+      "accuracy": 0.8293367187672364,
+      "macro avg": {
+        "precision": 0.5073001979170592,
+        "recall": 0.5948363385225012,
+        "f1-score": 0.4747637994342825,
+        "support": 4260606.0
+      },
+      "weighted avg": {
+        "precision": 0.9810814060521288,
+        "recall": 0.8293367187672364,
+        "f1-score": 0.896945864434897,
+        "support": 4260606.0
+      }
+    }
+  },
+  "validation_top_1pct": {
+    "top_fraction": 0.01,
+    "k_rows": 42489,
+    "precision_at_k": 0.0626279742992304,
+    "captured_positives": 2661,
+    "total_positives": 52460,
+    "recall_at_k": 0.05072436141822341
+  },
+  "validation_top_5pct": {
+    "top_fraction": 0.05,
+    "k_rows": 212448,
+    "precision_at_k": 0.0402027790329869,
+    "captured_positives": 8541,
+    "total_positives": 52460,
+    "recall_at_k": 0.16280975981700344
+  },
+  "test_top_1pct": {
+    "top_fraction": 0.01,
+    "k_rows": 42606,
+    "precision_at_k": 0.06151715720790499,
+    "captured_positives": 2621,
+    "total_positives": 46239,
+    "recall_at_k": 0.05668375181124159
+  },
+  "test_top_5pct": {
+    "top_fraction": 0.05,
+    "k_rows": 213030,
+    "precision_at_k": 0.03715439140027226,
+    "captured_positives": 7915,
+    "total_positives": 46239,
+    "recall_at_k": 0.17117584722853002
+  }
+}

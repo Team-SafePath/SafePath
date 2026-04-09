@@ -13,24 +13,21 @@ from sklearn.metrics import (
 )
 
 
-INPUT_PATH = Path("data/processed/full_panel_features.csv")
+INPUT_PATH = Path("data/processed/full_panel_features_with_infra.csv")
 MODEL_DIR = Path("models")
-
-METRICS_PATH = MODEL_DIR / "lightgbm_full_panel_metrics.json"
-FEATURE_IMPORTANCE_PATH = MODEL_DIR / "lightgbm_full_panel_feature_importance.csv"
-MODEL_TXT_PATH = MODEL_DIR / "lightgbm_full_panel.txt"
+METRICS_PATH = MODEL_DIR / "lightgbm_full_panel_with_infra_metrics.json"
+FEATURE_IMPORTANCE_PATH = MODEL_DIR / "lightgbm_full_panel_with_infra_feature_importance.csv"
 
 TRAIN_END_DATE = "2022-12-31"
 VALID_END_DATE = "2023-12-31"
 
 TARGET_COL = "crash_occurred"
-NON_FEATURE_COLS = ["segment_id", "date", "crash_count"]
+NON_FEATURE_COLS = {"segment_id", "date", "crash_count"}
 
-THRESHOLD_GRID = [
-    0.01, 0.02, 0.03, 0.04, 0.05,
-    0.075, 0.10, 0.15, 0.20, 0.25,
-    0.30, 0.40, 0.50
-]
+THRESHOLD = 0.5
+
+# Set to an integer like 2_000_000 for a faster trial run if needed
+SAMPLE_N = None
 
 
 def temporal_split(df: pd.DataFrame):
@@ -50,15 +47,27 @@ def temporal_split(df: pd.DataFrame):
 
 
 def prepare_xy(df: pd.DataFrame):
-    drop_cols = [TARGET_COL] + [c for c in NON_FEATURE_COLS if c in df.columns]
-    X = df.drop(columns=drop_cols).copy()
+    df = df.copy()
+
+    if TARGET_COL not in df.columns:
+        raise ValueError(f"Missing target column: {TARGET_COL}")
+
+    feature_cols = [
+        c for c in df.columns
+        if c not in NON_FEATURE_COLS and c != TARGET_COL
+    ]
+
+    X = df[feature_cols].copy()
     y = df[TARGET_COL].astype(int).copy()
+
+    if "segment_id" in X.columns:
+        raise ValueError("segment_id STILL in feature set — something is wrong")
 
     non_numeric = X.select_dtypes(exclude=["number", "bool"]).columns.tolist()
     if non_numeric:
         raise ValueError(f"Non-numeric feature columns found: {non_numeric}")
 
-    return X, y
+    return X, y, feature_cols
 
 
 def get_scale_pos_weight(y_train: pd.Series) -> float:
@@ -71,7 +80,7 @@ def get_scale_pos_weight(y_train: pd.Series) -> float:
     return negatives / positives
 
 
-def evaluate_at_threshold(y_true, y_prob, threshold: float) -> dict:
+def evaluate(y_true, y_prob, threshold: float) -> dict:
     y_pred = (y_prob >= threshold).astype(int)
 
     return {
@@ -88,21 +97,6 @@ def evaluate_at_threshold(y_true, y_prob, threshold: float) -> dict:
             zero_division=0,
         ),
     }
-
-
-def tune_threshold(y_true, y_prob):
-    best = None
-    best_score = -1.0
-
-    for threshold in THRESHOLD_GRID:
-        metrics = evaluate_at_threshold(y_true, y_prob, threshold)
-        score = metrics["f1"]
-
-        if score > best_score:
-            best_score = score
-            best = metrics
-
-    return best
 
 
 def top_k_capture(y_true, y_prob, top_fraction: float) -> dict:
@@ -131,16 +125,51 @@ def top_k_capture(y_true, y_prob, top_fraction: float) -> dict:
 
 
 def main():
-    print("Loading full panel...")
+    print("Loading enriched full panel...")
     df = pd.read_csv(INPUT_PATH)
+
+    if SAMPLE_N is not None and SAMPLE_N < len(df):
+        print(f"\nSampling {SAMPLE_N:,} rows for faster experimentation...")
+        df = df.sample(n=SAMPLE_N, random_state=42).copy()
+
+    print("\nLoaded shape:", df.shape)
+    print("\nDataset columns:")
+    print(df.columns.tolist())
+
+    print("\nInfrastructure feature presence:")
+    infra_features_to_check = [
+        "lanes",
+        "maxspeed",
+        "oneway",
+        "is_bridge",
+        "is_tunnel",
+        "is_junction",
+        "segment_curvature",
+        "bearing_change_max",
+        "u_degree",
+        "v_degree",
+        "intersection_degree_max",
+        "near_intersection",
+        "near_traffic_signal",
+        "near_crossing",
+        "curvature_norm",
+        "bearing_norm",
+        "intersection_norm",
+        "visibility_risk_score",
+    ]
+    for col in infra_features_to_check:
+        print(f"{col}: {'FOUND' if col in df.columns else 'MISSING'}")
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     train_df, valid_df, test_df = temporal_split(df)
 
-    X_train, y_train = prepare_xy(train_df)
-    X_valid, y_valid = prepare_xy(valid_df)
-    X_test, y_test = prepare_xy(test_df)
+    X_train, y_train, feature_cols = prepare_xy(train_df)
+    X_valid, y_valid, _ = prepare_xy(valid_df)
+    X_test, y_test, _ = prepare_xy(test_df)
+
+    print("\nFinal feature columns used:")
+    print(feature_cols)
 
     print("\nFeature matrix shapes:")
     print(f"X_train: {X_train.shape}")
@@ -181,18 +210,12 @@ def main():
         eval_metric="auc",
     )
 
-    # Save model for later prediction generation
-    model.booster_.save_model(str(MODEL_TXT_PATH))
-    print(f"Saved model to {MODEL_TXT_PATH}")
-
     print("Scoring validation and test...")
     y_valid_prob = model.predict_proba(X_valid)[:, 1]
     y_test_prob = model.predict_proba(X_test)[:, 1]
 
-    valid_best = tune_threshold(y_valid, y_valid_prob)
-    selected_threshold = valid_best["threshold"]
-
-    test_metrics = evaluate_at_threshold(y_test, y_test_prob, selected_threshold)
+    valid_metrics = evaluate(y_valid, y_valid_prob, THRESHOLD)
+    test_metrics = evaluate(y_test, y_test_prob, THRESHOLD)
 
     valid_top_1pct = top_k_capture(y_valid.to_numpy(), y_valid_prob, 0.01)
     valid_top_5pct = top_k_capture(y_valid.to_numpy(), y_valid_prob, 0.05)
@@ -202,7 +225,7 @@ def main():
     feature_importance = (
         pd.DataFrame(
             {
-                "feature": X_train.columns,
+                "feature": feature_cols,
                 "importance": model.feature_importances_,
             }
         )
@@ -211,32 +234,49 @@ def main():
     )
     feature_importance.to_csv(FEATURE_IMPORTANCE_PATH, index=False)
 
+    print("\nTop 30 features:")
+    print(feature_importance.head(30))
+
+    important_infra = [
+        "segment_curvature",
+        "bearing_change_max",
+        "intersection_degree_max",
+        "near_intersection",
+        "near_traffic_signal",
+        "lanes",
+        "maxspeed",
+        "visibility_risk_score",
+    ]
+
+    print("\nInfrastructure feature ranks:")
+    fi_ranked = feature_importance.reset_index()
+    fi_ranked["rank"] = fi_ranked["index"] + 1
+    for feat in important_infra:
+        if feat in fi_ranked["feature"].values:
+            rank = int(fi_ranked.loc[fi_ranked["feature"] == feat, "rank"].iloc[0])
+            imp = float(fi_ranked.loc[fi_ranked["feature"] == feat, "importance"].iloc[0])
+            print(f"{feat}: rank {rank}, importance {imp}")
+        else:
+            print(f"{feat}: not found")
+
     print("\nValidation metrics")
-    print(f"ROC-AUC: {valid_best['roc_auc']:.4f}")
-    print(f"Average Precision: {valid_best['average_precision']:.4f}")
-    print(f"Balanced Accuracy: {valid_best['balanced_accuracy']:.4f}")
-    print(f"F1: {valid_best['f1']:.4f}")
-    print(f"Selected threshold: {selected_threshold:.2f}")
+    print(f"ROC-AUC: {valid_metrics['roc_auc']:.4f}")
+    print(f"Average Precision: {valid_metrics['average_precision']:.4f}")
+    print(f"Balanced Accuracy: {valid_metrics['balanced_accuracy']:.4f}")
+    print(f"F1: {valid_metrics['f1']:.4f}")
     print("Confusion Matrix:")
-    print(pd.DataFrame(valid_best["confusion_matrix"]))
+    print(pd.DataFrame(valid_metrics["confusion_matrix"]))
 
     print("\nTest metrics")
     print(f"ROC-AUC: {test_metrics['roc_auc']:.4f}")
     print(f"Average Precision: {test_metrics['average_precision']:.4f}")
     print(f"Balanced Accuracy: {test_metrics['balanced_accuracy']:.4f}")
     print(f"F1: {test_metrics['f1']:.4f}")
-    print(f"Threshold: {selected_threshold:.2f}")
     print("Confusion Matrix:")
     print(pd.DataFrame(test_metrics["confusion_matrix"]))
 
-    print("\nTop-K ranking metrics")
-    print("Validation top 1%:", valid_top_1pct)
-    print("Validation top 5%:", valid_top_5pct)
-    print("Test top 1%:", test_top_1pct)
-    print("Test top 5%:", test_top_5pct)
-
     output = {
-        "model": "LightGBM Full Panel",
+        "model": "LightGBM Full Panel With Infrastructure",
         "input_path": str(INPUT_PATH),
         "train_end_date": TRAIN_END_DATE,
         "valid_end_date": VALID_END_DATE,
@@ -244,10 +284,10 @@ def main():
         "valid_rows": int(len(valid_df)),
         "test_rows": int(len(test_df)),
         "n_features": int(X_train.shape[1]),
-        "feature_columns": list(X_train.columns),
+        "feature_columns": list(feature_cols),
         "scale_pos_weight": float(scale_pos_weight),
-        "selected_threshold": float(selected_threshold),
-        "validation_metrics": valid_best,
+        "threshold": float(THRESHOLD),
+        "validation_metrics": valid_metrics,
         "test_metrics": test_metrics,
         "validation_top_1pct": valid_top_1pct,
         "validation_top_5pct": valid_top_5pct,
