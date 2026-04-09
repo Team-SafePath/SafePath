@@ -1,9 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import FeatureImportanceChart from "@/src/components/FeatureImportanceChart";
-import TopRiskSegments from "@/src/components/TopRiskSegments";
-import RiskTimingSummary from "@/src/components/RiskTimingSummary";
+import FeatureImportanceChart from "@/src/components/insights/FeatureImportanceChart";
+import GMMClusterArchetypes from "@/src/components/insights/GMMClusterArchetypes";
+import HMMRegimeSummary from "@/src/components/insights/HMMRegimeSummary";
+import ModelTakeaways from "@/src/components/insights/ModelTakeaways";
+import LimitationsPanel from "@/src/components/insights/LimitationsPanel";
 
 function SectionCard({
   id,
@@ -30,7 +30,6 @@ function SectionCard({
         <h2 className="text-3xl font-bold tracking-tight">{title}</h2>
         <p className="max-w-3xl text-slate-600">{description}</p>
       </div>
-
       {children}
     </section>
   );
@@ -45,7 +44,7 @@ export default function InsightsPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-semibold text-slate-900">Insights</p>
               <p className="mt-1 text-sm text-slate-600">
-                Explore crash risk through the Why / Where / When framework.
+                Final model findings organized around Why, Where, and When.
               </p>
 
               <nav className="mt-5 flex flex-col gap-3 text-sm">
@@ -57,6 +56,15 @@ export default function InsightsPage() {
                 </a>
                 <a href="#when" className="text-slate-700 hover:text-slate-900">
                   When
+                </a>
+                <a href="#so-what" className="text-slate-700 hover:text-slate-900">
+                  So What
+                </a>
+                <a
+                  href="#limitations"
+                  className="text-slate-700 hover:text-slate-900"
+                >
+                  Limitations
                 </a>
               </nav>
 
@@ -74,52 +82,71 @@ export default function InsightsPage() {
           <div className="space-y-8">
             <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
               <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-                Why · Where · When
+                SafePath Modeling Summary
               </p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight">
-                Crash Insights
+                Why · Where · When
               </h1>
               <p className="mt-4 max-w-4xl text-slate-600">
-                SafePath approaches crash risk from three angles: why risk is
-                associated with certain features, where high-risk patterns are
-                concentrated across the network, and when citywide risk regimes
-                shift over time.
+                SafePath combines supervised and unsupervised modeling to explain
+                crash risk from three angles: why certain features drive risk,
+                where high-risk segment archetypes are concentrated, and when the
+                city shifts into elevated crash regimes.
               </p>
             </div>
 
             <SectionCard
               id="why"
               eyebrow="Why"
-              title="Why do crashes happen?"
-              description="This section explains the factors most associated with crash risk, including recent crash persistence, environmental context, and roadway characteristics."
+              title="Why does crash risk rise?"
+              description="The supervised model highlights which structural, environmental, and recent-history features matter most when ranking segment-level crash risk."
             >
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-6">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                  <h3 className="text-lg font-semibold">Key drivers</h3>
+                  <h3 className="text-lg font-semibold">
+                    Top predictive drivers
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Feature importance values show which variables the
+                    infrastructure-aware LightGBM model relied on most when
+                    separating higher-risk from lower-risk segments.
+                  </p>
 
                   <div className="mt-4">
                     <FeatureImportanceChart />
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                  <h3 className="text-lg font-semibold">Interpretation</h3>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Feature importance percentages show how much each variable
-                    contributes to the model’s predictions relative to the other
-                    top-ranked features. Higher percentages indicate features
-                    that the model relies on more heavily when distinguishing
-                    between higher- and lower-risk segments.
-                  </p>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                    <h3 className="text-lg font-semibold">Interpretation</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      Risk is not explained by crash history alone. Structural
+                      variables such as segment curvature, turning complexity,
+                      lane count, speed environment, and a composite visibility
+                      risk score all emerged as important predictors alongside
+                      weather.
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      That means the model is now capturing physical road
+                      conditions that help explain why certain segments remain
+                      riskier even before a specific crash occurs.
+                    </p>
+                  </div>
 
-                  <p className="mt-4 text-sm text-slate-600">
-                    In SafePath, recent crash history and environmental context
-                    emerge as the dominant drivers of risk. This suggests that
-                    crash risk is shaped less by roadway structure alone and
-                    more by a combination of temporal persistence and changing
-                    conditions such as temperature, precipitation, and seasonal
-                    timing.
-                  </p>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                    <h3 className="text-lg font-semibold">
+                      Key structural takeaway
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      The strongest infrastructure signals point to segments that
+                      are more difficult to navigate or interpret: curved
+                      segments, sharper bearing changes, higher visibility risk,
+                      and more complex intersection environments. These features
+                      make crash risk more explainable in engineering terms, not
+                      just statistical terms.
+                    </p>
+                  </div>
                 </div>
               </div>
             </SectionCard>
@@ -127,67 +154,37 @@ export default function InsightsPage() {
             <SectionCard
               id="where"
               eyebrow="Where"
-              title="Where are crashes concentrated?"
-              description="This section identifies the specific segments that the model flags as highest risk and summarizes what they have in common."
+              title="Where are high-risk patterns concentrated?"
+              description="The spatial clustering model groups segments into recurring archetypes that capture different kinds of road environments, including persistent residential risk and elevated corridor risk."
             >
-              <div className="space-y-6">
-                <TopRiskSegments />
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                  <h3 className="text-lg font-semibold">Interpretation</h3>
-
-                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <p className="text-sm text-slate-600">
-                      Rather than only showing abstract cluster averages, this
-                      view surfaces the specific segments that repeatedly rank
-                      highest in modeled crash risk. These are the roads most
-                      relevant for prioritization when safety resources are
-                      limited.
-                    </p>
-
-                    <p className="text-sm text-slate-600">
-                      The top-risk group also reveals shared structural patterns
-                      such as dominant road types, elevated historical crash
-                      counts, and stronger overall segment risk. This makes the
-                      Where question concrete: which roads stand out, and what
-                      do they have in common?
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <GMMClusterArchetypes />
             </SectionCard>
 
             <SectionCard
               id="when"
               eyebrow="When"
-              title="When does risk change?"
-              description="This section shows when the city is more likely to enter higher-risk conditions, using HMM regime output summarized over time."
+              title="When does the city enter elevated crash regimes?"
+              description="The HMM summarizes daily citywide conditions into recurring temporal regimes, distinguishing normal operating periods from more persistent high-risk periods."
             >
-              <div className="space-y-6">
-                <RiskTimingSummary />
+              <HMMRegimeSummary />
+            </SectionCard>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                  <h3 className="text-lg font-semibold">Interpretation</h3>
+            <SectionCard
+              id="so-what"
+              eyebrow="So What"
+              title="What should stakeholders take away?"
+              description="These models are most useful as a prioritization and interpretation tool: they help identify which segments deserve attention, what kinds of segment environments are repeatedly risky, and when citywide conditions become more elevated."
+            >
+              <ModelTakeaways />
+            </SectionCard>
 
-                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <p className="text-sm text-slate-600">
-                      The HMM is useful because it turns daily crash conditions
-                      into interpretable risk regimes rather than treating each
-                      day as an isolated observation. That makes it possible to
-                      identify periods where the city is operating under more
-                      elevated background risk.
-                    </p>
-
-                    <p className="text-sm text-slate-600">
-                      This timing view is still broad rather than event-specific:
-                      it highlights monthly and regime-based changes, not exact
-                      holidays or hourly traffic peaks. But it provides a much
-                      clearer answer to the When question than a simple average
-                      over latent states.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <SectionCard
+              id="limitations"
+              eyebrow="Limitations"
+              title="What this system does not claim"
+              description="SafePath is a predictive and exploratory system, not a causal model. These outputs should support prioritization and diagnosis, not be treated as proof of cause."
+            >
+              <LimitationsPanel />
             </SectionCard>
           </div>
         </div>
