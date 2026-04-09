@@ -1,0 +1,44 @@
+{
+  "input_path": "data/processed/hmm_daily_features_with_infra.csv",
+  "n_rows": 2557,
+  "n_features": 10,
+  "feature_columns": [
+    "total_crashes",
+    "crash_rate",
+    "avg_crashes_last_7_days",
+    "avg_crashes_last_30_days",
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "windspeed_10m_max",
+    "rain_indicator",
+    "crashes_7d_avg_city",
+    "crashes_30d_avg_city"
+  ],
+  "n_states": 3,
+  "state_counts": {
+    "0": 885,
+    "1": 839,
+    "2": 833
+  },
+  "transition_matrix": [
+    [
+      0.6131221702018558,
+      0.38687782979814417,
+      2.8615669154718064e-94
+    ],
+    [
+      0.40762812930541753,
+      0.5923718706945825,
+      2.4596893419714818e-88
+    ],
+    [
+      0.0012004802037992874,
+      1.3096899290452055e-45,
+      0.9987995197962007
+    ]
+  ],
+  "model_path": "models/hmm_daily_regimes_with_infra.joblib",
+  "scaler_path": "models/hmm_daily_regimes_with_infra_scaler.joblib",
+  "states_path": "data/processed/hmm_daily_states_with_infra.csv",
+  "summary_path": "data/processed/hmm_state_summary_with_infra.csv"
+}
