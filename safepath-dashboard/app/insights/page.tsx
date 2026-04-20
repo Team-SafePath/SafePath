@@ -4,6 +4,8 @@ import GMMClusterArchetypes from "@/src/components/insights/GMMClusterArchetypes
 import HMMRegimeSummary from "@/src/components/insights/HMMRegimeSummary";
 import ModelTakeaways from "@/src/components/insights/ModelTakeaways";
 import LimitationsPanel from "@/src/components/insights/LimitationsPanel";
+import ClusterFeatureHeatmap from "@/src/components/insights/ClusterFeatureHeatmap";
+import KeyTakeawaysPanel from "@/src/components/insights/KeyTakeawaysPanel";
 
 function SectionCard({
   id,
@@ -95,6 +97,8 @@ export default function InsightsPage() {
               </p>
             </div>
 
+            <KeyTakeawaysPanel />
+            
             <SectionCard
               id="why"
               eyebrow="Why"
@@ -158,6 +162,7 @@ export default function InsightsPage() {
               description="The spatial clustering model groups segments into recurring archetypes that capture different kinds of road environments, including persistent residential risk and elevated corridor risk."
             >
               <GMMClusterArchetypes />
+              <ClusterFeatureHeatmap />
             </SectionCard>
 
             <SectionCard

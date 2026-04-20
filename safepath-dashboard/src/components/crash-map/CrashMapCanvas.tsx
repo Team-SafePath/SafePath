@@ -13,7 +13,6 @@ import {
 
 type Props = {
   mode: MapMode;
-  topK: "all" | "top10" | "top5" | "top1";
   clusterFilter: string;
   overlay: InfrastructureOverlay;
   selectedSegment: SelectedSegment;
@@ -45,23 +44,60 @@ function FitBoundsOnce({ data }: { data: SegmentFeatureCollection | null }) {
   return null;
 }
 
+function ZoomToSelectedSegment({
+  data,
+  selectedSegment,
+}: {
+  data: SegmentFeatureCollection | null;
+  selectedSegment: SelectedSegment;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!data || !selectedSegment) return;
+
+    const match = data.features.find(
+      (f) => f.properties.segment_id === selectedSegment.segment_id
+    );
+
+    if (!match) return;
+
+    const layer = L.geoJSON(match as GeoJSON.GeoJsonObject);
+    const bounds = layer.getBounds();
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, {
+        padding: [60, 60],
+        maxZoom: 17,
+        animate: true,
+      });
+    }
+  }, [data, selectedSegment, map]);
+
+  return null;
+}
+
 function getContinuousColor(value: number, maxValue: number) {
   const ratio = maxValue > 0 ? value / maxValue : 0;
 
-  if (ratio > 0.85) return "#7f0000";
-  if (ratio > 0.65) return "#b30000";
-  if (ratio > 0.45) return "#e34a33";
-  if (ratio > 0.25) return "#fc8d59";
-  if (ratio > 0.1) return "#fdcc8a";
-  return "#fee8c8";
+  if (ratio > 0.9) return "#4c1d95";
+  if (ratio > 0.75) return "#6d28d9";
+  if (ratio > 0.55) return "#8b5cf6";
+  if (ratio > 0.35) return "#c4b5fd";
+  if (ratio > 0.15) return "#e9d5ff";
+  return "#f5f3ff";
+}
+
+function getHistoricalColor(value: number) {
+  return getContinuousColor(value, 1);
+}
+
+function getPredictedColor(percentile: number) {
+  return getContinuousColor(percentile, 1);
 }
 
 function getBinaryColor(value: number) {
   return value === 1 ? "#0f766e" : "#ccfbf1";
-}
-
-function getMutedColor() {
-  return "#d1d5db";
 }
 
 function getClusterColor(label: string | undefined) {
@@ -170,43 +206,23 @@ function passesClusterFilter(
   return (feature.properties.cluster_label ?? "") === clusterFilter;
 }
 
-function isHighlightedTopRisk(
-  feature: SegmentFeature,
-  mode: MapMode,
-  topK: "all" | "top10" | "top5" | "top1"
-) {
-  if (mode !== "predicted" || topK === "all") return true;
-
-  const p = feature.properties;
-
-  if (topK === "top10") return Number(p.is_top10_risk ?? 0) === 1;
-  if (topK === "top5") return Number(p.is_top5_risk ?? 0) === 1;
-  if (topK === "top1") return Number(p.is_top1_risk ?? 0) === 1;
-
-  return true;
-}
-
 function getColorByMode(
   feature: SegmentFeature,
   mode: MapMode,
   overlay: InfrastructureOverlay,
   infrastructureMax: number,
-  clusterFilter: string,
-  topK: "all" | "top10" | "top5" | "top1"
+  clusterFilter: string
 ) {
   const p = feature.properties;
 
   if (mode === "historical") {
     const crashes = Number(p.log_total_crashes ?? 0);
-    return getContinuousColor(crashes, 1);
+    return getHistoricalColor(crashes);
   }
 
   if (mode === "predicted") {
-    const highlighted = isHighlightedTopRisk(feature, mode, topK);
-    if (!highlighted) return getMutedColor();
-
-    const pct = Number(p.risk_percentile ?? 0);
-    return getContinuousColor(pct, 1);
+    const percentile = Number(p.risk_percentile ?? 0);
+    return getPredictedColor(percentile);
   }
 
   if (clusterFilter !== "all") {
@@ -222,39 +238,16 @@ function getColorByMode(
   return getContinuousColor(value, infrastructureMax);
 }
 
-function getWeightByMode(
-  feature: SegmentFeature,
-  mode: MapMode,
-  topK: "all" | "top10" | "top5" | "top1",
-  isSelected: boolean
-) {
-  if (isSelected) return 4;
-
-  if (mode === "predicted" && topK !== "all") {
-    return isHighlightedTopRisk(feature, mode, topK) ? 2.8 : 1.2;
-  }
-
-  return 2.2;
+function getWeightByMode(isSelected: boolean) {
+  return isSelected ? 4 : 2.2;
 }
 
-function getOpacityByMode(
-  feature: SegmentFeature,
-  mode: MapMode,
-  topK: "all" | "top10" | "top5" | "top1",
-  isSelected: boolean
-) {
-  if (isSelected) return 1;
-
-  if (mode === "predicted" && topK !== "all") {
-    return isHighlightedTopRisk(feature, mode, topK) ? 1 : 0.22;
-  }
-
-  return 0.9;
+function getOpacityByMode(isSelected: boolean) {
+  return isSelected ? 1 : 0.9;
 }
 
 export default function CrashMapCanvas({
   mode,
-  topK,
   clusterFilter,
   overlay,
   selectedSegment,
@@ -314,11 +307,9 @@ export default function CrashMapCanvas({
     mode === "historical"
       ? "Historical Crash Intensity"
       : mode === "predicted"
-      ? topK === "all"
-        ? "Predicted Risk Percentile"
-        : `Predicted Risk · ${
-            topK === "top10" ? "Top 10%" : topK === "top5" ? "Top 5%" : "Top 1%"
-          } Highlight`
+      ? clusterFilter !== "all"
+        ? "Predicted Risk Percentile · Cluster Filtered"
+        : "Predicted Risk Percentile"
       : clusterFilter !== "all"
       ? "Infrastructure Cluster"
       : `${formatOverlayLabel(overlay)} Intensity`;
@@ -327,9 +318,9 @@ export default function CrashMapCanvas({
     mode === "historical"
       ? "Darker lines indicate segments with more historical crashes."
       : mode === "predicted"
-      ? topK === "all"
-        ? "Darker lines indicate segments ranked higher by the prediction model."
-        : "Highlighted segments belong to the selected top-risk slice, while the rest of the network remains visible for context."
+      ? clusterFilter !== "all"
+        ? "Darker purple lines indicate segments ranked higher by the prediction model within the selected cluster."
+        : "Darker purple lines indicate segments ranked higher by the prediction model."
       : clusterFilter !== "all"
       ? "Color reflects the selected spatial archetype."
       : overlay === "near_traffic_signal" || overlay === "near_intersection"
@@ -370,8 +361,13 @@ export default function CrashMapCanvas({
         />
 
         <FitBoundsOnce data={data} />
+        <ZoomToSelectedSegment
+          data={clusterFilteredData}
+          selectedSegment={selectedSegment}
+        />
 
         <GeoJSON
+          key={`geojson-${mode}-${clusterFilter}-${overlay}-${clusterFilteredData.features.length}`}
           data={clusterFilteredData as GeoJSON.GeoJsonObject}
           style={(feature) => {
             const f = feature as unknown as SegmentFeature;
@@ -384,11 +380,10 @@ export default function CrashMapCanvas({
                 mode,
                 overlay,
                 infrastructureMax,
-                clusterFilter,
-                topK
+                clusterFilter
               ),
-              weight: getWeightByMode(f, mode, topK, isSelected),
-              opacity: getOpacityByMode(f, mode, topK, isSelected),
+              weight: getWeightByMode(isSelected),
+              opacity: getOpacityByMode(isSelected),
             };
           }}
           onEachFeature={(feature, layer) => {
