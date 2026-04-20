@@ -8,8 +8,6 @@ import {
 type Props = {
   mode: MapMode;
   onModeChange: (mode: MapMode) => void;
-  topK: "all" | "top10" | "top5" | "top1";
-  onTopKChange: (value: "all" | "top10" | "top5" | "top1") => void;
   clusterFilter: string;
   onClusterFilterChange: (value: string) => void;
   overlay: InfrastructureOverlay;
@@ -19,13 +17,14 @@ type Props = {
 export default function CrashMapControls({
   mode,
   onModeChange,
-  topK,
-  onTopKChange,
   clusterFilter,
   onClusterFilterChange,
   overlay,
   onOverlayChange,
 }: Props) {
+  const clusterEnabled = mode === "predicted" || mode === "infrastructure";
+  const overlayEnabled = mode === "infrastructure";
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -44,6 +43,7 @@ export default function CrashMapControls({
             >
               Historical Crashes
             </button>
+
             <button
               onClick={() => onModeChange("predicted")}
               className={`rounded-full px-4 py-2 text-sm font-medium ${
@@ -54,6 +54,7 @@ export default function CrashMapControls({
             >
               Predicted Risk
             </button>
+
             <button
               onClick={() => onModeChange("infrastructure")}
               className={`rounded-full px-4 py-2 text-sm font-medium ${
@@ -67,26 +68,7 @@ export default function CrashMapControls({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3 xl:w-[720px]">
-          <div>
-            <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Top Risk Filter
-            </label>
-            <select
-              value={topK}
-              onChange={(e) =>
-                onTopKChange(e.target.value as "all" | "top10" | "top5" | "top1")
-              }
-              disabled={mode !== "predicted"}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
-            >
-              <option value="all">All segments</option>
-              <option value="top10">Top 10%</option>
-              <option value="top5">Top 5%</option>
-              <option value="top1">Top 1%</option>
-            </select>
-          </div>
-
+        <div className="grid gap-4 md:grid-cols-2 xl:w-[560px]">
           <div>
             <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               Cluster Filter
@@ -94,7 +76,7 @@ export default function CrashMapControls({
             <select
               value={clusterFilter}
               onChange={(e) => onClusterFilterChange(e.target.value)}
-              disabled={mode !== "infrastructure"}
+              disabled={!clusterEnabled}
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
             >
               <option value="all">All clusters</option>
@@ -123,7 +105,7 @@ export default function CrashMapControls({
               onChange={(e) =>
                 onOverlayChange(e.target.value as InfrastructureOverlay)
               }
-              disabled={mode !== "infrastructure"}
+              disabled={!overlayEnabled}
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
             >
               <option value="visibility_risk_score">Visibility Risk</option>
@@ -131,12 +113,32 @@ export default function CrashMapControls({
               <option value="bearing_change_max">Bearing Change</option>
               <option value="intersection_degree_max">Intersection Degree</option>
               <option value="near_traffic_signal">Traffic Signal Proximity</option>
+              <option value="near_intersection">Intersection Proximity</option>
               <option value="lanes">Lanes</option>
               <option value="maxspeed">Max Speed</option>
             </select>
           </div>
         </div>
       </div>
+
+      {mode === "predicted" && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <span className="font-medium text-slate-800">How to read this:</span>{" "}
+          predicted mode now colors every segment by its modeled risk percentile,
+          so darker purple segments represent locations the model ranks as more
+          crash-prone. You can also apply cluster filters here to see whether
+          certain roadway archetypes dominate the highest-risk predicted areas.
+        </div>
+      )}
+
+      {mode === "infrastructure" && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <span className="font-medium text-slate-800">How to read this:</span>{" "}
+          infrastructure mode focuses on structural roadway patterns. Use the
+          overlay selector to compare segment-level attributes such as visibility
+          risk, curvature, speed environment, and intersection complexity.
+        </div>
+      )}
     </div>
   );
 }
