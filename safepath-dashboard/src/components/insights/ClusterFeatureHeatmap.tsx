@@ -11,7 +11,6 @@ type GeoJsonFeature = {
     road_type?: string;
     total_crashes?: number;
     avg_predicted_risk?: number;
-    avg_crash_rate?: number;
     risk_percentile?: number;
     lanes?: number;
     maxspeed?: number;
@@ -30,7 +29,6 @@ type GeoJsonCollection = {
 };
 
 type ClusterSummary = {
-  gmm_cluster: number;
   cluster_label: string;
   values: Record<string, number>;
 };
@@ -48,14 +46,22 @@ type SpeedBandSummary = {
 const MAP_DATA_URL = process.env.NEXT_PUBLIC_SEGMENT_MAP_URL;
 
 const FEATURE_DEFS: { key: string; label: string }[] = [
-  { key: "avg_predicted_risk", label: "Pred Risk" },
-  { key: "total_crashes", label: "Crashes" },
-  { key: "maxspeed", label: "Speed" },
-  { key: "lanes", label: "Lanes" },
-  { key: "visibility_risk_score", label: "Visibility" },
-  { key: "segment_curvature", label: "Curvature" },
   { key: "bearing_change_max", label: "Bearing" },
+  { key: "total_crashes", label: "Crashes" },
+  { key: "segment_curvature", label: "Curvature" },
   { key: "intersection_degree_max", label: "Intersect" },
+  { key: "lanes", label: "Lanes" },
+  { key: "avg_predicted_risk", label: "Pred Risk" },
+  { key: "maxspeed", label: "Speed" },
+  { key: "visibility_risk_score", label: "Visibility" },
+];
+
+const CLUSTER_ORDER = [
+  "Low-Risk Baseline",
+  "Elevated Risk Corridors",
+  "Intermediate Risk Group",
+  "Moderate-Risk Segments",
+  "High-Risk Persistent Segments"
 ];
 
 function mean(values: number[]) {
@@ -141,9 +147,16 @@ function shortClusterLabel(label: string) {
       return "Intermediate";
     case "Low-Risk Baseline":
       return "Baseline";
+    case "Unassigned":
+      return "Unassigned";
     default:
       return label;
   }
+}
+
+function normalizeClusterLabel(label?: string) {
+  const cleaned = label?.trim();
+  return cleaned && cleaned.length > 0 ? cleaned : "Unassigned";
 }
 
 function bandLabel(speed: number) {
@@ -192,53 +205,48 @@ export default function ClusterFeatureHeatmap() {
   const normalizedClusters = useMemo(() => {
     if (!data) return [];
 
-    const grouped = new Map<number, GeoJsonFeature[]>();
+    const grouped = new Map<string, GeoJsonFeature[]>();
 
     for (const feature of data.features) {
-      const clusterId = feature.properties.gmm_cluster;
-      if (clusterId === undefined || Number.isNaN(clusterId)) continue;
-
-      if (!grouped.has(clusterId)) grouped.set(clusterId, []);
-      grouped.get(clusterId)!.push(feature);
+      const label = normalizeClusterLabel(feature.properties.cluster_label);
+      if (!grouped.has(label)) grouped.set(label, []);
+      grouped.get(label)!.push(feature);
     }
 
     const summaries: ClusterSummary[] = [];
 
-    for (const [gmm_cluster, features] of grouped.entries()) {
+    for (const label of CLUSTER_ORDER) {
+      const features = grouped.get(label);
+      if (!features || features.length === 0) continue;
+
       const props = features.map((f) => f.properties);
-      const cluster_label =
-        props.find((p) => p.cluster_label)?.cluster_label ?? `Cluster ${gmm_cluster}`;
 
       summaries.push({
-        gmm_cluster,
-        cluster_label,
+        cluster_label: label,
         values: {
-          avg_predicted_risk: mean(props.map((p) => Number(p.avg_predicted_risk ?? 0))),
-          total_crashes: mean(props.map((p) => Number(p.total_crashes ?? 0))),
-          maxspeed: mean(props.map((p) => Number(p.maxspeed ?? 0))),
-          lanes: mean(props.map((p) => Number(p.lanes ?? 0))),
-          visibility_risk_score: mean(
-            props.map((p) => Number(p.visibility_risk_score ?? 0))
-          ),
-          segment_curvature: mean(
-            props.map((p) => Number(p.segment_curvature ?? 0))
-          ),
           bearing_change_max: mean(
             props.map((p) => Number(p.bearing_change_max ?? 0))
           ),
+          total_crashes: mean(props.map((p) => Number(p.total_crashes ?? 0))),
+          segment_curvature: mean(
+            props.map((p) => Number(p.segment_curvature ?? 0))
+          ),
           intersection_degree_max: mean(
             props.map((p) => Number(p.intersection_degree_max ?? 0))
+          ),
+          lanes: mean(props.map((p) => Number(p.lanes ?? 0))),
+          avg_predicted_risk: mean(
+            props.map((p) => Number(p.avg_predicted_risk ?? 0))
+          ),
+          maxspeed: mean(props.map((p) => Number(p.maxspeed ?? 0))),
+          visibility_risk_score: mean(
+            props.map((p) => Number(p.visibility_risk_score ?? 0))
           ),
         },
       });
     }
 
-    const sorted = summaries.sort(
-      (a, b) =>
-        (b.values.avg_predicted_risk ?? 0) - (a.values.avg_predicted_risk ?? 0)
-    );
-
-    return normalizeByColumn(sorted);
+    return normalizeByColumn(summaries);
   }, [data]);
 
   const speedBands = useMemo<SpeedBandSummary[]>(() => {
@@ -341,7 +349,7 @@ export default function ClusterFeatureHeatmap() {
               ))}
 
               {normalizedClusters.map((cluster) => (
-                <div key={cluster.gmm_cluster} className="contents">
+                <div key={cluster.cluster_label} className="contents">
                   <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
                     {shortClusterLabel(cluster.cluster_label)}
                   </div>
@@ -351,7 +359,7 @@ export default function ClusterFeatureHeatmap() {
 
                     return (
                       <div
-                        key={`${cluster.gmm_cluster}-${feature.key}`}
+                        key={`${cluster.cluster_label}-${feature.key}`}
                         className={`flex h-[48px] items-center justify-center rounded-xl text-sm font-semibold ${colorForValue(
                           value
                         )}`}
