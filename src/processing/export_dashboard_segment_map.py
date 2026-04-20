@@ -8,6 +8,7 @@ import pandas as pd
 NETWORK_PATH = Path("data/raw/nyc_street_network.geojson")
 PANEL_PATH = Path("data/processed/full_panel_features_with_infra.csv")
 CLUSTERS_PATH = Path("data/processed/segment_clusters_with_infra.csv")
+PREDICTIONS_PATH = Path("data/processed/segment_prediction_summary_with_infra.csv")
 OUT_PATH = Path("data/processed/segment_combined_map.geojson")
 
 SIMPLIFY_TOLERANCE_METERS = 6.0
@@ -23,11 +24,6 @@ def normalize_road_type(val):
 
 
 def resolve_prefer_y(df: pd.DataFrame, base_name: str):
-    """
-    Resolve columns like lanes_x / lanes_y into a single lanes column,
-    preferring the merged-in summary value (_y) when present, then falling
-    back to the original network value (_x).
-    """
     x_col = f"{base_name}_x"
     y_col = f"{base_name}_y"
 
@@ -58,6 +54,15 @@ def main():
     print("Loading GMM cluster assignments...")
     clusters = pd.read_csv(CLUSTERS_PATH)
 
+    if not PREDICTIONS_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing {PREDICTIONS_PATH}. "
+            "You need a true segment-level prediction summary before exporting the dashboard map."
+        )
+
+    print("Loading segment prediction summary...")
+    preds = pd.read_csv(PREDICTIONS_PATH)
+
     required_panel_cols = {
         "segment_id",
         "segment_length",
@@ -70,7 +75,6 @@ def main():
         "near_traffic_signal",
         "visibility_risk_score",
         "crash_count",
-        "crash_occurred",
     }
     missing_panel = required_panel_cols - set(panel.columns)
     if missing_panel:
@@ -81,12 +85,16 @@ def main():
     if missing_cluster:
         raise ValueError(f"Missing required columns in clusters: {missing_cluster}")
 
-    print("\nAggregating panel to segment-level dashboard fields...")
+    required_pred_cols = {"segment_id", "avg_predicted_risk", "risk_percentile"}
+    missing_pred = required_pred_cols - set(preds.columns)
+    if missing_pred:
+        raise ValueError(f"Missing required columns in predictions file: {missing_pred}")
+
+    print("\nAggregating historical + infrastructure fields to segment level...")
     seg_summary = (
         panel.groupby("segment_id")
         .agg(
             total_crashes=("crash_count", "sum"),
-            avg_predicted_risk=("crash_occurred", "mean"),
             segment_length=("segment_length", "first"),
             lanes=("lanes", "first"),
             maxspeed=("maxspeed", "first"),
@@ -102,14 +110,14 @@ def main():
 
     seg_summary["log_total_crashes"] = np.log1p(seg_summary["total_crashes"])
 
-    max_risk = seg_summary["avg_predicted_risk"].max()
-    if pd.notna(max_risk) and max_risk > 0:
-        seg_summary["normalized_risk"] = seg_summary["avg_predicted_risk"] / max_risk
-    else:
-        seg_summary["normalized_risk"] = 0.0
-
     cluster_keep = (
         clusters[["segment_id", "gmm_cluster", "cluster_label"]]
+        .drop_duplicates(subset=["segment_id"])
+        .copy()
+    )
+
+    pred_keep = (
+        preds[["segment_id", "avg_predicted_risk", "risk_percentile"]]
         .drop_duplicates(subset=["segment_id"])
         .copy()
     )
@@ -123,6 +131,12 @@ def main():
         suffixes=("_network", "_panel"),
     )
     merged = merged.merge(
+        pred_keep,
+        on="segment_id",
+        how="left",
+        validate="one_to_one",
+    )
+    merged = merged.merge(
         cluster_keep,
         on="segment_id",
         how="left",
@@ -132,7 +146,6 @@ def main():
     print("\nColumns after merge:")
     print(merged.columns.tolist())
 
-    # Resolve potential duplicate columns introduced by merge
     for col in [
         "segment_length",
         "lanes",
@@ -146,7 +159,6 @@ def main():
     ]:
         merged = resolve_prefer_y(merged, col)
 
-    # Also handle the explicit suffix names from the merge above if needed
     fallback_pairs = {
         "segment_length": ("segment_length_network", "segment_length_panel"),
         "lanes": ("lanes_network", "lanes_panel"),
@@ -165,19 +177,26 @@ def main():
                 merged[base] = merged[x_col]
                 merged = merged.drop(columns=[x_col])
 
-    # Resolve road type from network
     if "highway" in merged.columns:
         merged["road_type"] = merged["highway"].apply(normalize_road_type)
     else:
         merged["road_type"] = "unknown"
 
+    # Add exact top-k flags for the dashboard
+    merged["is_top1_risk"] = (merged["risk_percentile"] >= 0.99).astype(int)
+    merged["is_top5_risk"] = (merged["risk_percentile"] >= 0.95).astype(int)
+    merged["is_top10_risk"] = (merged["risk_percentile"] >= 0.90).astype(int)
+
     keep_cols = [
         "segment_id",
         "road_type",
         "total_crashes",
-        "avg_predicted_risk",
-        "normalized_risk",
         "log_total_crashes",
+        "avg_predicted_risk",
+        "risk_percentile",
+        "is_top1_risk",
+        "is_top5_risk",
+        "is_top10_risk",
         "segment_length",
         "lanes",
         "maxspeed",
@@ -192,36 +211,16 @@ def main():
         "geometry",
     ]
     keep_cols = [c for c in keep_cols if c in merged.columns]
-
-    missing_keep = {
-        "segment_id",
-        "road_type",
-        "total_crashes",
-        "avg_predicted_risk",
-        "segment_length",
-        "lanes",
-        "maxspeed",
-        "segment_curvature",
-        "bearing_change_max",
-        "intersection_degree_max",
-        "near_intersection",
-        "near_traffic_signal",
-        "visibility_risk_score",
-        "gmm_cluster",
-        "cluster_label",
-        "geometry",
-    } - set(keep_cols)
-    if missing_keep:
-        print("\nWarning: these expected dashboard fields are still missing:")
-        print(sorted(missing_keep))
-
     merged = merged[keep_cols].copy()
 
     numeric_fill_zero = [
         "total_crashes",
-        "avg_predicted_risk",
-        "normalized_risk",
         "log_total_crashes",
+        "avg_predicted_risk",
+        "risk_percentile",
+        "is_top1_risk",
+        "is_top5_risk",
+        "is_top10_risk",
         "segment_length",
         "lanes",
         "maxspeed",
@@ -237,17 +236,19 @@ def main():
         if col in merged.columns:
             merged[col] = pd.to_numeric(merged[col], errors="coerce").fillna(0)
 
-    if "road_type" in merged.columns:
-        merged["road_type"] = merged["road_type"].fillna("unknown")
-    if "cluster_label" in merged.columns:
-        merged["cluster_label"] = merged["cluster_label"].fillna("Unassigned")
+    merged["road_type"] = merged["road_type"].fillna("unknown")
+    merged["cluster_label"] = merged["cluster_label"].fillna("Unassigned")
 
-    if "near_intersection" in merged.columns:
-        merged["near_intersection"] = merged["near_intersection"].round().astype(int)
-    if "near_traffic_signal" in merged.columns:
-        merged["near_traffic_signal"] = merged["near_traffic_signal"].round().astype(int)
-    if "gmm_cluster" in merged.columns:
-        merged["gmm_cluster"] = merged["gmm_cluster"].round().astype(int)
+    for col in [
+        "near_intersection",
+        "near_traffic_signal",
+        "is_top1_risk",
+        "is_top5_risk",
+        "is_top10_risk",
+        "gmm_cluster",
+    ]:
+        if col in merged.columns:
+            merged[col] = merged[col].round().astype(int)
 
     print(f"Simplifying geometry with tolerance {SIMPLIFY_TOLERANCE_METERS} meters...")
     original_crs = merged.crs
