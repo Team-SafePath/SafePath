@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import CrashMapControls from "@/src/components/crash-map/CrashMapControls";
 import SegmentDetailsPanel from "@/src/components/crash-map/SegmentDetailsPanel";
+import TopRiskSegmentsPanel from "@/src/components/crash-map/TopRiskSegmentsPanel";
 import {
   InfrastructureOverlay,
   MapMode,
@@ -15,22 +16,26 @@ const CrashMapCanvas = dynamic(
   { ssr: false }
 );
 
+type SidePanelTab = "details" | "top-risk";
+
 export default function CrashMapShell() {
   const [mode, setMode] = useState<MapMode>("historical");
   const [selectedSegment, setSelectedSegment] = useState<SelectedSegment>(null);
-  const [topK, setTopK] = useState<"all" | "top10" | "top5" | "top1">("all");
   const [clusterFilter, setClusterFilter] = useState<string>("all");
   const [overlay, setOverlay] =
     useState<InfrastructureOverlay>("visibility_risk_score");
+  const [sidePanelTab, setSidePanelTab] = useState<SidePanelTab>("details");
 
   const pageDescription = useMemo(() => {
     if (mode === "historical") {
-      return "Explore where crashes have historically been concentrated across the street network.";
+      return "Explore where crashes have historically concentrated across the street network and identify segments with the strongest observed crash burden.";
     }
+
     if (mode === "predicted") {
-      return "View model-estimated crash risk and focus on the highest-priority segments.";
+      return "View model-estimated crash risk across all segments using percentile-based coloring, and use cluster filters to see which roadway archetypes dominate the highest-risk predicted areas.";
     }
-    return "Inspect structural and infrastructural patterns that appear in higher-risk segments.";
+
+    return "Inspect structural roadway patterns using infrastructure overlays such as visibility risk, curvature, speed environment, and intersection complexity.";
   }, [mode]);
 
   return (
@@ -50,8 +55,6 @@ export default function CrashMapShell() {
           <CrashMapControls
             mode={mode}
             onModeChange={setMode}
-            topK={topK}
-            onTopKChange={setTopK}
             clusterFilter={clusterFilter}
             onClusterFilterChange={setClusterFilter}
             overlay={overlay}
@@ -59,23 +62,59 @@ export default function CrashMapShell() {
           />
         </div>
 
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <CrashMapCanvas
               mode={mode}
-              topK={topK}
               clusterFilter={clusterFilter}
               overlay={overlay}
               selectedSegment={selectedSegment}
-              onSelectSegment={setSelectedSegment}
+              onSelectSegment={(segment) => {
+                setSelectedSegment(segment);
+                setSidePanelTab("details");
+              }}
             />
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <SegmentDetailsPanel
-              mode={mode}
-              selectedSegment={selectedSegment}
-            />
+            <div className="mb-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSidePanelTab("details")}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                  sidePanelTab === "details"
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                Segment Details
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSidePanelTab("top-risk")}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                  sidePanelTab === "top-risk"
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                Top Risk Segments
+              </button>
+            </div>
+
+            {sidePanelTab === "details" ? (
+              <SegmentDetailsPanel
+                mode={mode}
+                selectedSegment={selectedSegment}
+              />
+            ) : (
+              <TopRiskSegmentsPanel
+                clusterFilter={clusterFilter}
+                onSelectSegment={setSelectedSegment}
+                onOpenDetails={() => setSidePanelTab("details")}
+              />
+            )}
           </div>
         </div>
       </div>
