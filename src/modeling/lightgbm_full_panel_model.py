@@ -17,6 +17,7 @@ INPUT_PATH = Path("data/processed/full_panel_features_with_infra.csv")
 MODEL_DIR = Path("models")
 METRICS_PATH = MODEL_DIR / "lightgbm_full_panel_with_infra_metrics.json"
 FEATURE_IMPORTANCE_PATH = MODEL_DIR / "lightgbm_full_panel_with_infra_feature_importance.csv"
+SEGMENT_PREDICTION_SUMMARY_PATH = Path("data/processed/segment_prediction_summary_with_infra.csv")
 
 TRAIN_END_DATE = "2022-12-31"
 VALID_END_DATE = "2023-12-31"
@@ -25,8 +26,6 @@ TARGET_COL = "crash_occurred"
 NON_FEATURE_COLS = {"segment_id", "date", "crash_count"}
 
 THRESHOLD = 0.5
-
-# Set to an integer like 2_000_000 for a faster trial run if needed
 SAMPLE_N = None
 
 
@@ -124,6 +123,37 @@ def top_k_capture(y_true, y_prob, top_fraction: float) -> dict:
     }
 
 
+def build_segment_prediction_summary(df: pd.DataFrame, y_prob: pd.Series) -> pd.DataFrame:
+    pred_df = pd.DataFrame(
+        {
+            "segment_id": df["segment_id"].values,
+            "predicted_risk": y_prob,
+        }
+    )
+
+    summary = (
+        pred_df.groupby("segment_id")
+        .agg(
+            avg_predicted_risk=("predicted_risk", "mean"),
+            max_predicted_risk=("predicted_risk", "max"),
+        )
+        .reset_index()
+    )
+
+    # Percentile rank based on average predicted risk
+    summary["risk_percentile"] = summary["avg_predicted_risk"].rank(
+        method="average",
+        pct=True,
+    )
+
+    # Useful hard flags for dashboard filtering
+    summary["is_top1_risk"] = (summary["risk_percentile"] >= 0.99).astype(int)
+    summary["is_top5_risk"] = (summary["risk_percentile"] >= 0.95).astype(int)
+    summary["is_top10_risk"] = (summary["risk_percentile"] >= 0.90).astype(int)
+
+    return summary.sort_values("avg_predicted_risk", ascending=False).reset_index(drop=True)
+
+
 def main():
     print("Loading enriched full panel...")
     df = pd.read_csv(INPUT_PATH)
@@ -135,30 +165,6 @@ def main():
     print("\nLoaded shape:", df.shape)
     print("\nDataset columns:")
     print(df.columns.tolist())
-
-    print("\nInfrastructure feature presence:")
-    infra_features_to_check = [
-        "lanes",
-        "maxspeed",
-        "oneway",
-        "is_bridge",
-        "is_tunnel",
-        "is_junction",
-        "segment_curvature",
-        "bearing_change_max",
-        "u_degree",
-        "v_degree",
-        "intersection_degree_max",
-        "near_intersection",
-        "near_traffic_signal",
-        "near_crossing",
-        "curvature_norm",
-        "bearing_norm",
-        "intersection_norm",
-        "visibility_risk_score",
-    ]
-    for col in infra_features_to_check:
-        print(f"{col}: {'FOUND' if col in df.columns else 'MISSING'}")
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -175,11 +181,6 @@ def main():
     print(f"X_train: {X_train.shape}")
     print(f"X_valid: {X_valid.shape}")
     print(f"X_test:  {X_test.shape}")
-
-    print("\nTarget rates:")
-    print(f"Train positive rate: {y_train.mean():.6f}")
-    print(f"Valid positive rate: {y_valid.mean():.6f}")
-    print(f"Test positive rate:  {y_test.mean():.6f}")
 
     scale_pos_weight = get_scale_pos_weight(y_train)
     print(f"\nscale_pos_weight: {scale_pos_weight:.4f}")
@@ -234,46 +235,21 @@ def main():
     )
     feature_importance.to_csv(FEATURE_IMPORTANCE_PATH, index=False)
 
-    print("\nTop 30 features:")
-    print(feature_importance.head(30))
+    print("\nTop 20 features:")
+    print(feature_importance.head(20))
 
-    important_infra = [
-        "segment_curvature",
-        "bearing_change_max",
-        "intersection_degree_max",
-        "near_intersection",
-        "near_traffic_signal",
-        "lanes",
-        "maxspeed",
-        "visibility_risk_score",
-    ]
+    # Build dashboard prediction summary from the full dataset
+    print("\nScoring full panel for dashboard prediction summary...")
+    X_all, _, _ = prepare_xy(df)
+    all_prob = model.predict_proba(X_all)[:, 1]
 
-    print("\nInfrastructure feature ranks:")
-    fi_ranked = feature_importance.reset_index()
-    fi_ranked["rank"] = fi_ranked["index"] + 1
-    for feat in important_infra:
-        if feat in fi_ranked["feature"].values:
-            rank = int(fi_ranked.loc[fi_ranked["feature"] == feat, "rank"].iloc[0])
-            imp = float(fi_ranked.loc[fi_ranked["feature"] == feat, "importance"].iloc[0])
-            print(f"{feat}: rank {rank}, importance {imp}")
-        else:
-            print(f"{feat}: not found")
+    segment_prediction_summary = build_segment_prediction_summary(df, all_prob)
+    SEGMENT_PREDICTION_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    segment_prediction_summary.to_csv(SEGMENT_PREDICTION_SUMMARY_PATH, index=False)
 
-    print("\nValidation metrics")
-    print(f"ROC-AUC: {valid_metrics['roc_auc']:.4f}")
-    print(f"Average Precision: {valid_metrics['average_precision']:.4f}")
-    print(f"Balanced Accuracy: {valid_metrics['balanced_accuracy']:.4f}")
-    print(f"F1: {valid_metrics['f1']:.4f}")
-    print("Confusion Matrix:")
-    print(pd.DataFrame(valid_metrics["confusion_matrix"]))
-
-    print("\nTest metrics")
-    print(f"ROC-AUC: {test_metrics['roc_auc']:.4f}")
-    print(f"Average Precision: {test_metrics['average_precision']:.4f}")
-    print(f"Balanced Accuracy: {test_metrics['balanced_accuracy']:.4f}")
-    print(f"F1: {test_metrics['f1']:.4f}")
-    print("Confusion Matrix:")
-    print(pd.DataFrame(test_metrics["confusion_matrix"]))
+    print(f"Saved segment prediction summary to {SEGMENT_PREDICTION_SUMMARY_PATH}")
+    print("\nTop 10 segment predictions:")
+    print(segment_prediction_summary.head(10))
 
     output = {
         "model": "LightGBM Full Panel With Infrastructure",
