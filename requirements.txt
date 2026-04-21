@@ -1,3 +1,4 @@
+altair==6.0.0
 affine==2.4.0
 appnope==0.1.4
 asttokens==3.0.1
@@ -63,6 +64,7 @@ requests==2.32.5
 rtree==1.4.1
 scikit-learn==1.8.0
 scipy==1.17.1
+seaborn==0.13.2
 setuptools==82.0.1
 shapely==2.1.2
 six==1.17.0
