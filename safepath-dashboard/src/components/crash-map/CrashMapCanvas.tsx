@@ -1,3 +1,5 @@
+// Portions of the React Leaflet integration and map interaction logic
+// were developed with the assistance of AI tools (ChatGPT).
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
